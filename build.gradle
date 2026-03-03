@@ -76,9 +76,6 @@ minecraft {
 dependencies {
 
     minecraft 'net.minecraftforge:forge:1.12.2-14.23.5.2854'
-
-    compile 'hellfirepvp.astralsorcery:astralsorcery:1.12.2-1.10.25-v167'
-    runtime 'curse.maven:baubles-227083:2518667'
 }
 
 // Example for how to get properties into the manifest for reading by the runtime..
