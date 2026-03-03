@@ -16,7 +16,7 @@ plugins {
 apply plugin: 'net.minecraftforge.gradle'
 
 group = 'mixu'
-version = '1.12.2-1.0.2'
+version = '1.12.2-1.0.3'
 archivesBaseName = 'astral-level-cap'
 
 sourceCompatibility = targetCompatibility = compileJava.sourceCompatibility = compileJava.targetCompatibility = '1.8'
