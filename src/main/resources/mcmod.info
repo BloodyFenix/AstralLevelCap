@@ -3,7 +3,7 @@
     "modid": "astral-level-cap",
     "name": "Astral Level Cap",
     "description": "Increases the maximum level cap for Astral Sorcery perks from 30 to 100 (configurable).",
-    "version": "1.12.2-1.0.1",
+    "version": "1.12.2-1.0.2",
     "mcversion": "${mcversion}",
     "url": "",
     "updateUrl": "",

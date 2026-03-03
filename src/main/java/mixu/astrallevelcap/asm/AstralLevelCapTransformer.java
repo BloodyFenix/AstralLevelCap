@@ -85,54 +85,51 @@ public class AstralLevelCapTransformer implements IClassTransformer {
     }
 
     /**
-     * Метод, который находит и изменяет поле LEVEL_CAP в классе
+     * Метод, который находит и изменяет все использования числа 30 в классе
      *
-     * В AstralSorcery максимальный уровень хранится в статическом поле:
+     * В AstralSorcery максимальный уровень инициализируется в статическом блоке:
      * private static int LEVEL_CAP = 30;
      *
-     * Мы находим это поле и меняем его начальное значение с 30 на наше.
+     * Значение 30 присваивается в методе <clinit> (статический инициализатор).
+     * Мы находим все инструкции BIPUSH 30 и заменяем их на наше значение.
      *
      * @param clazz - узел класса (представление класса в виде дерева)
      */
     private void transformAstral(ClassNode clazz) {
-        boolean fieldFound = false;
         int newMaxLevel = AstralLevelCap.AstralLevelCapConfig.maxLevel;
-        
-        AstralLevelCapPlugin.logger.info("Searching for LEVEL_CAP field in class...");
-        
-        // Перебираем все поля класса
-        for (FieldNode field : clazz.fields) {
-            // Ищем поле с именем LEVEL_CAP
-            if (field.name.equals(LEVEL_CAP_FIELD)) {
-                AstralLevelCapPlugin.logger.info("Found LEVEL_CAP field with value: " + field.value);
-                
-                // Меняем начальное значение поля
-                field.value = newMaxLevel;
-                fieldFound = true;
-                
-                AstralLevelCapPlugin.logger.info("Changed LEVEL_CAP field value from 30 to " + newMaxLevel);
-                break;
-            }
-        }
-        
-        if (!fieldFound) {
-            AstralLevelCapPlugin.logger.error("LEVEL_CAP field not found! The mod will not work.");
-            return;
-        }
-        
-        // Дополнительно: ищем и заменяем все прямые использования числа 30 в методах
-        // Это нужно на случай, если где-то используется константа напрямую
         int totalReplacedCount = 0;
+        boolean foundInClinit = false;
         
+        AstralLevelCapPlugin.logger.info("Searching for LEVEL_CAP initialization (value 30) in class methods...");
+        
+        // Перебираем все методы класса
         for (MethodNode method : clazz.methods) {
             int methodReplacedCount = 0;
             
+            // Перебираем все инструкции в методе
             for (AbstractInsnNode instruction : method.instructions.toArray()) {
-                // Проверяем, является ли инструкция числом 30
-                if (instruction.getOpcode() == BIPUSH) {
+                // Ищем инструкции BIPUSH или SIPUSH с операндом 30
+                if (instruction.getOpcode() == BIPUSH || instruction.getOpcode() == SIPUSH) {
                     IntInsnNode intNode = (IntInsnNode) instruction;
                     if (intNode.operand == 30) {
-                        AstralLevelCapPlugin.logger.info("Found hardcoded 30 in method: " + method.name);
+                        // Проверяем, что следующая инструкция - это присваивание в LEVEL_CAP
+                        // или это используется в цикле/сравнении
+                        AbstractInsnNode nextInsn = instruction.getNext();
+                        boolean isLevelCapAssignment = false;
+                        
+                        // Проверяем, является ли это присваиванием в статическое поле
+                        if (nextInsn != null && nextInsn.getOpcode() == PUTSTATIC) {
+                            FieldInsnNode fieldInsn = (FieldInsnNode) nextInsn;
+                            if (fieldInsn.name.equals(LEVEL_CAP_FIELD)) {
+                                isLevelCapAssignment = true;
+                                foundInClinit = true;
+                                AstralLevelCapPlugin.logger.info("Found LEVEL_CAP initialization in method: " + method.name);
+                            }
+                        }
+                        
+                        // Заменяем значение независимо от того, где оно используется
+                        AstralLevelCapPlugin.logger.info("Found value 30 in method: " + method.name +
+                            (isLevelCapAssignment ? " (LEVEL_CAP assignment)" : " (other usage)"));
                         
                         AbstractInsnNode newInstruction;
                         if (newMaxLevel <= 127) {
@@ -145,18 +142,23 @@ public class AstralLevelCapTransformer implements IClassTransformer {
                         methodReplacedCount++;
                         totalReplacedCount++;
                         
-                        AstralLevelCapPlugin.logger.info("Replaced hardcoded 30 to " + newMaxLevel + " in method: " + method.name);
+                        AstralLevelCapPlugin.logger.info("Replaced value 30 to " + newMaxLevel + " in method: " + method.name);
                     }
                 }
             }
             
             if (methodReplacedCount > 0) {
-                AstralLevelCapPlugin.logger.info("Method '" + method.name + "': replaced " + methodReplacedCount + " hardcoded constant(s)");
+                AstralLevelCapPlugin.logger.info("Method '" + method.name + "': replaced " + methodReplacedCount + " constant(s)");
             }
         }
         
-        if (totalReplacedCount > 0) {
-            AstralLevelCapPlugin.logger.info("Additionally replaced " + totalReplacedCount + " hardcoded constant(s) in methods");
+        if (totalReplacedCount == 0) {
+            AstralLevelCapPlugin.logger.error("No value 30 found in any method! The mod will not work.");
+        } else {
+            AstralLevelCapPlugin.logger.info("Total: Successfully replaced " + totalReplacedCount + " constant(s)");
+            if (foundInClinit) {
+                AstralLevelCapPlugin.logger.info("Successfully patched LEVEL_CAP initialization!");
+            }
         }
     }
 }
