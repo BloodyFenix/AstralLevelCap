@@ -113,57 +113,63 @@ public class AstralLevelCapTransformer implements IClassTransformer {
     }
 
     /**
-     * Метод, который находит и изменяет нужный метод в классе
+     * Метод, который находит и изменяет нужные методы в классе
+     *
+     * ВАЖНО: Мы заменяем число 30 во ВСЕХ методах класса, потому что:
+     * 1. В методе ensureLevels() - создается таблица опыта (строка 44: for (int i = 1; i <= 30; i++))
+     * 2. В методе getNextLevelPercent() - проверяется максимальный уровень (строка 90: if (level >= 30))
+     * 3. Могут быть другие места, где используется это ограничение
      *
      * @param clazz - узел класса (представление класса в виде дерева)
      */
     private void transformAstral(ClassNode clazz) {
-        // Перебираем все методы в классе
+        int totalReplacedCount = 0;  // Общий счетчик замененных инструкций
+        
+        // Перебираем ВСЕ методы в классе (не только ensureLevels)
         for (MethodNode method : clazz.methods) {
+            int methodReplacedCount = 0;  // Счетчик для текущего метода
             
-            // Ищем метод с именем "ensureLevels"
-            if (method.name.equals(astralFunction)) {
-                int replacedCount = 0;  // Счетчик замененных инструкций
+            // Перебираем все инструкции в методе
+            // method.instructions.toArray() - преобразуем список инструкций в массив
+            for (AbstractInsnNode instruction : method.instructions.toArray()) {
                 
-                // Перебираем все инструкции в методе
-                // method.instructions.toArray() - преобразуем список инструкций в массив
-                for (AbstractInsnNode instruction : method.instructions.toArray()) {
+                // Проверяем, является ли текущая инструкция числом 30
+                if (isMaxLevelNode(instruction)) {
+                    AstralLevelCapPlugin.logger.info("Found max level constant (30) in method: " + method.name);
                     
-                    // Проверяем, является ли текущая инструкция числом 30
-                    if (isMaxLevelNode(instruction)) {
-                        AstralLevelCapPlugin.logger.info("Found max level constant (30) at instruction");
-                        
-                        // Получаем новое значение максимального уровня из конфигурации
-                        int newMaxLevel = AstralLevelCap.AstralLevelCapConfig.maxLevel;
-                        AbstractInsnNode newInstruction;  // Новая инструкция
-                        
-                        // Выбираем тип инструкции в зависимости от размера числа
-                        if (newMaxLevel <= 127) {
-                            // Для чисел <= 127 используем BIPUSH (занимает меньше места)
-                            newInstruction = new IntInsnNode(BIPUSH, newMaxLevel);
-                        } else {
-                            // Для больших чисел используем SIPUSH
-                            newInstruction = new IntInsnNode(SIPUSH, newMaxLevel);
-                        }
-                        
-                        // ГЛАВНОЕ: Заменяем старую инструкцию (BIPUSH 30) на новую (BIPUSH 100 или другое значение)
-                        method.instructions.set(instruction, newInstruction);
-                        replacedCount++;  // Увеличиваем счетчик
-                        
-                        AstralLevelCapPlugin.logger.info("Replaced max level from 30 to " + newMaxLevel);
+                    // Получаем новое значение максимального уровня из конфигурации
+                    int newMaxLevel = AstralLevelCap.AstralLevelCapConfig.maxLevel;
+                    AbstractInsnNode newInstruction;  // Новая инструкция
+                    
+                    // Выбираем тип инструкции в зависимости от размера числа
+                    if (newMaxLevel <= 127) {
+                        // Для чисел <= 127 используем BIPUSH (занимает меньше места)
+                        newInstruction = new IntInsnNode(BIPUSH, newMaxLevel);
+                    } else {
+                        // Для больших чисел используем SIPUSH
+                        newInstruction = new IntInsnNode(SIPUSH, newMaxLevel);
                     }
+                    
+                    // ГЛАВНОЕ: Заменяем старую инструкцию (BIPUSH 30) на новую (BIPUSH 100 или другое значение)
+                    method.instructions.set(instruction, newInstruction);
+                    methodReplacedCount++;  // Увеличиваем счетчик для метода
+                    totalReplacedCount++;   // Увеличиваем общий счетчик
+                    
+                    AstralLevelCapPlugin.logger.info("Replaced max level from 30 to " + newMaxLevel + " in method: " + method.name);
                 }
-                
-                // Проверяем, нашли ли мы хотя бы одну инструкцию
-                if (replacedCount == 0) {
-                    AstralLevelCapPlugin.logger.warn("No max level constant found! The mod might not work correctly.");
-                } else {
-                    AstralLevelCapPlugin.logger.info("Successfully replaced " + replacedCount + " max level constant(s)");
-                }
-                
-                // Прерываем цикл, так как мы нашли и изменили нужный метод
-                break;
             }
+            
+            // Если в методе были замены - выводим информацию
+            if (methodReplacedCount > 0) {
+                AstralLevelCapPlugin.logger.info("Method '" + method.name + "': replaced " + methodReplacedCount + " constant(s)");
+            }
+        }
+        
+        // Проверяем, нашли ли мы хотя бы одну инструкцию во всем классе
+        if (totalReplacedCount == 0) {
+            AstralLevelCapPlugin.logger.warn("No max level constant found in any method! The mod might not work correctly.");
+        } else {
+            AstralLevelCapPlugin.logger.info("Total: Successfully replaced " + totalReplacedCount + " max level constant(s) across all methods");
         }
     }
 }
